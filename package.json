@@ -1,0 +1,61 @@
+{
+  "name": "pi-background-agents",
+  "version": "0.1.0",
+  "description": "Background subagents with a live progress panel and a /goal loop that waits for them, for the pi coding agent.",
+  "type": "module",
+  "license": "MIT",
+  "author": "rafae2k",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafae2k/pi-background-agents.git"
+  },
+  "homepage": "https://github.com/rafae2k/pi-background-agents#readme",
+  "bugs": "https://github.com/rafae2k/pi-background-agents/issues",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "subagents",
+    "background-agents",
+    "goal"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "extensions",
+    "src",
+    "docs/panel.png",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/dispatch-agent.ts",
+      "./extensions/goal.ts"
+    ],
+    "image": "https://raw.githubusercontent.com/rafae2k/pi-background-agents/main/docs/panel.png"
+  },
+  "scripts": {
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@earendil-works/pi-tui": "1.4.0",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  },
+  "packageManager": "pnpm@12.15.0"
+}
