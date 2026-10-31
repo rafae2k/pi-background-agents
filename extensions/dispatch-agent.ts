@@ -144,7 +144,12 @@ export default function (pi: ExtensionAPI) {
     housekeeping.unref?.();
   };
 
-  const publishState = () => pi.events.emit(STATE_CHANNEL, { active: activeCount() });
+  // After shutdown this runtime is gone: an agent ending late must not touch it, or pi crashes.
+  let closed = false;
+
+  const publishState = () => {
+    if (!closed) pi.events.emit(STATE_CHANNEL, { active: activeCount() });
+  };
 
   /** Starts the agents and returns one promise per report. `carry` keeps the conversation of a continued agent. */
   const launch = (specs: AgentSpec[], ctx: ExtensionContext, background: boolean, carry?: AgentRecord) => {
@@ -162,7 +167,7 @@ export default function (pi: ExtensionAPI) {
       agents.set(spec.name, rec);
       return runAgent(spec, rec, options).then((report) => {
         publishState();
-        if (background) {
+        if (background && !closed) {
           const stillRunning = [...agents.values()].filter(isActive).map((a) => a.name);
           const suffix = stillRunning.length
             ? `\n\nStill running, reports will follow: ${stillRunning.join(", ")}.`
@@ -389,6 +394,7 @@ export default function (pi: ExtensionAPI) {
 
   // Child processes must not outlive the session that is waiting for their reports.
   pi.on("session_shutdown", () => {
+    closed = true;
     for (const a of agents.values()) if (isActive(a)) a.stop?.("stopped: parent session closed");
     stopWidget();
     uiCtx = undefined;

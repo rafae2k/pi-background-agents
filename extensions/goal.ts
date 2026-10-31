@@ -66,6 +66,7 @@ export default function (pi: ExtensionAPI) {
   let turns = 0;
   let activeAgents = 0;
   let cancelEvaluation: (() => void) | undefined;
+  let closed = false;
 
   const persist = () => pi.appendEntry(STATE_TYPE, state);
 
@@ -119,6 +120,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_tree", reconstruct);
 
   pi.on("session_shutdown", () => {
+    closed = true;
+    cancelEvaluation?.();
     if (ticker) clearInterval(ticker);
     ticker = undefined;
     uiCtx = undefined;
@@ -323,18 +326,18 @@ export default function (pi: ExtensionAPI) {
         verdict = judged;
       }
     } catch (err) {
-      // After /goal stop the state already says why it stopped.
-      if (!state?.active) return;
+      // After /goal stop the state already says why it stopped; after shutdown this context is gone.
+      if (closed || !state?.active) return;
       if (signal.aborted) return pause("aborted", "Goal paused: evaluation cancelled. /goal resume to continue.");
       return pause("error", `Goal paused: the evaluator failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       cancelEvaluation = undefined;
       stopWatchingEsc?.();
-      if (ctx.mode === "tui") ctx.ui.setWorkingMessage();
+      if (!closed && ctx.mode === "tui") ctx.ui.setWorkingMessage();
     }
 
     // The evaluation can take minutes: if the user ran /goal stop meanwhile, their decision stands.
-    if (!state?.active) return;
+    if (closed || !state?.active) return;
 
     if (verdict.done) return pause("met", `Goal met after ${state.iteration} continuation(s). ${verdict.reason}`);
     if (state.iteration >= state.maxIterations) {

@@ -13,6 +13,7 @@ First release.
 
 ## 0.1.1 (2026-10-31)
 
+- Fixed a crash: `/reload` or `/new` with an agent running took pi down when the agent ended.
 - Fixed `/agents stop all`, `/agents open <name>` and similar needing Enter twice: the suggestion list no longer stays open once a word is complete.
 - Fixed `/goal stop` being ignored when it arrived during an evaluation.
 - `Esc` and `/goal stop` now cancel a running evaluation, including the check command.
