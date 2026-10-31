@@ -1,0 +1,2 @@
+# Dev dependencies only need their JavaScript here; their install scripts stay off.
+strictDepBuilds: false
