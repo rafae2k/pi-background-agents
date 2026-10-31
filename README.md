@@ -1,6 +1,5 @@
 # pi-background-agents
 
-[![CI](https://github.com/rafae2k/pi-background-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/rafae2k/pi-background-agents/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Background subagents with a live progress panel, and a `/goal` loop that waits for them, for the [pi coding agent](https://github.com/badlogic/pi-mono).
