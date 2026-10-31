@@ -33,6 +33,7 @@ import {
 import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 import {
   addTranscript,
+  agentArgCompletions,
   createRecord,
   DEFAULT_TIMEOUT_MINUTES,
   DEPTH_ENV,
@@ -54,7 +55,6 @@ const REPORT_DIR = join(tmpdir(), "pi-agents");
 const REPORT_MESSAGE_TYPE = "agent-report";
 const STATE_CHANNEL = "dispatch:state"; // consumed by goal.ts: a goal is never judged while agents run
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const VERBS = ["open", "send", "stop", "log", "status"];
 
 /** Re-invoke the same pi CLI the parent runs on; fall back to PATH. */
 function piCommand(): { cmd: string; prefix: string[] } {
@@ -324,18 +324,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("agents", {
     description: "Manage subagents: /agents | open <name> | send <name> <text> | stop <name|all> | log <name> | status",
-    getArgumentCompletions: (prefix) => {
-      const parts = prefix.split(/\s+/);
-      if (parts.length <= 1) {
-        const items = VERBS.filter((v) => v.startsWith(parts[0] ?? "")).map((v) => ({ value: `${v} `, label: v }));
-        return items.length ? items : null;
-      }
-      const names = [...agents.keys(), ...(parts[0] === "stop" ? ["all"] : [])];
-      const items = names
-        .filter((n) => n.startsWith(parts[1] ?? ""))
-        .map((n) => ({ value: `${parts[0]} ${n} `, label: n }));
-      return items.length ? items : null;
-    },
+    getArgumentCompletions: (prefix) => agentArgCompletions(prefix, [...agents.keys()]),
     handler: async (args, ctx) => {
       uiCtx = ctx;
       const trimmed = args.trim();

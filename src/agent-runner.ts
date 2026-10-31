@@ -21,6 +21,25 @@ export function parseMaxParallel(raw: string | undefined): number {
   return Number.isInteger(n) && n >= 1 ? n : DEFAULT_MAX_PARALLEL;
 }
 
+const VERBS = ["open", "send", "stop", "log", "status"];
+
+/**
+ * Suggestions for `/agents`. Returns null once the word is fully typed: while a suggestion is on
+ * screen Enter accepts it instead of submitting, so `/agents stop all` would need Enter twice.
+ */
+export function agentArgCompletions(prefix: string, names: string[]): { value: string; label: string }[] | null {
+  const parts = prefix.split(/\s+/);
+  if (parts.length > 2) return null;
+  const word = parts.at(-1) ?? "";
+  const verb = parts.length === 2 ? parts[0] : undefined;
+  const options = verb ? (verb === "status" ? [] : verb === "stop" ? [...names, "all"] : names) : VERBS;
+  if (options.includes(word)) return null;
+  const items = options
+    .filter((o) => o.startsWith(word))
+    .map((o) => ({ value: verb ? `${verb} ${o} ` : `${o} `, label: o }));
+  return items.length ? items : null;
+}
+
 export function createRecord(spec: AgentSpec, defaultCwd: string, now = Date.now()): AgentRecord {
   return {
     name: spec.name,

@@ -75,6 +75,13 @@ describe("withTimeout", () => {
     await assert.rejects(withTimeout(new Promise(() => {}), 5, "the judge"), /the judge gave no answer/);
   });
 
+  it("rejects on abort even when the work ignores its signal", async () => {
+    const controller = new AbortController();
+    const pending = withTimeout(new Promise(() => {}), 60_000, "the judge", controller.signal);
+    controller.abort();
+    await assert.rejects(pending, /the judge was cancelled/);
+  });
+
   it("passes the result through", async () => {
     assert.equal(await withTimeout(Promise.resolve(1), 1000, "x"), 1);
   });

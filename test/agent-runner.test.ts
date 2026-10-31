@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  agentArgCompletions,
   applyEvent,
   buildChildArgs,
   createRecord,
@@ -118,6 +119,28 @@ describe("buildChildArgs", () => {
     assert.equal(inherited[inherited.indexOf("--model") + 1], "p/m");
     const own = buildChildArgs({ name: "a", brief: "b", model: "x/y" }, { approve: true, defaultModel: "p/m" });
     assert.equal(own[own.indexOf("--model") + 1], "x/y");
+  });
+});
+
+describe("agentArgCompletions", () => {
+  it("suggests verbs, then agent names", () => {
+    assert.deepEqual(
+      agentArgCompletions("st", ["a"])?.map((i) => i.label),
+      ["stop", "status"],
+    );
+    assert.deepEqual(agentArgCompletions("open b", ["bob"]), [{ value: "open bob ", label: "bob" }]);
+    assert.deepEqual(
+      agentArgCompletions("stop ", ["bob"])?.map((i) => i.label),
+      ["bob", "all"],
+    );
+  });
+
+  it("stays out of the way once a word is complete, so Enter submits", () => {
+    assert.equal(agentArgCompletions("status", ["a"]), null);
+    assert.equal(agentArgCompletions("stop all", ["a"]), null);
+    assert.equal(agentArgCompletions("open bob", ["bob"]), null);
+    assert.equal(agentArgCompletions("send bob hello", ["bob"]), null);
+    assert.equal(agentArgCompletions("open nobody", ["bob"]), null);
   });
 });
 

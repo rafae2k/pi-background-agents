@@ -17,7 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { matchesKey, Text } from "@earendil-works/pi-tui";
 import { formatDuration } from "../src/format.ts";
 import {
   blockText,
@@ -65,6 +65,7 @@ export default function (pi: ExtensionAPI) {
   let phase = "working";
   let turns = 0;
   let activeAgents = 0;
+  let cancelEvaluation: (() => void) | undefined;
 
   const persist = () => pi.appendEntry(STATE_TYPE, state);
 
@@ -110,6 +111,8 @@ export default function (pi: ExtensionAPI) {
       if (entry.type === "custom" && entry.customType === STATE_TYPE) state = (entry.data as GoalState | null) ?? null;
     }
     if (state) state.startedAt ??= Date.now();
+    // Reopening a session starts no run: the goal waits for the next message or /goal resume.
+    phase = "idle, /goal resume to continue";
     syncStatus(ctx);
   };
   pi.on("session_start", reconstruct);
@@ -139,8 +142,8 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  async function runCheck(ctx: ExtensionContext, cmd: string): Promise<Verdict> {
-    const r = await pi.exec("sh", ["-c", cmd], { cwd: ctx.cwd, timeout: CHECK_TIMEOUT_MS, signal: ctx.signal });
+  async function runCheck(ctx: ExtensionContext, cmd: string, signal: AbortSignal): Promise<Verdict> {
+    const r = await pi.exec("sh", ["-c", cmd], { cwd: ctx.cwd, timeout: CHECK_TIMEOUT_MS, signal });
     if (r.code === 0) return { done: true, reason: `\`${cmd}\` exited 0` };
     const out = `${r.stdout}\n${r.stderr}`.trim().slice(-CHECK_OUTPUT_TAIL);
     return {
@@ -150,7 +153,12 @@ export default function (pi: ExtensionAPI) {
   }
 
   /** Returns null when the judge produced no parseable verdict (evaluator failure, not agent failure). */
-  async function runJudge(ctx: ExtensionContext, objective: string, messages: readonly any[]): Promise<Verdict | null> {
+  async function runJudge(
+    ctx: ExtensionContext,
+    objective: string,
+    messages: readonly any[],
+    signal: AbortSignal,
+  ): Promise<Verdict | null> {
     if (!ctx.model) return null;
     // Instructions go in the user message too: some providers (e.g. bridges) drop systemPrompt.
     const request =
@@ -169,10 +177,11 @@ export default function (pi: ExtensionAPI) {
           // Same shape as pi's own compaction one-shots. pi-claude-bridge reads cacheRetention "none" as "no tools by
           // design"; without it the judge would get Claude Code's own shell and file tools. Its own session id keeps
           // it apart from the session's running query.
-          { signal: ctx.signal, cacheRetention: "none", sessionId: randomUUID() },
+          { signal, cacheRetention: "none", sessionId: randomUUID() },
         ),
         JUDGE_TIMEOUT_MS,
         "the judge",
+        signal,
       );
       const verdict = parseVerdict(blockText(response.content));
       if (verdict) return verdict;
@@ -211,6 +220,7 @@ export default function (pi: ExtensionAPI) {
           state = { ...state, active: false, outcome: "stopped" };
           persist();
         }
+        cancelEvaluation?.();
         syncStatus(ctx);
         ctx.ui.notify("Goal paused.", "info");
         return;
@@ -281,16 +291,29 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
+    // pi has no run to abort at this point, so Esc would not reach an evaluation on its own.
+    const evaluation = new AbortController();
+    cancelEvaluation = () => evaluation.abort();
+    const signal = ctx.signal ? AbortSignal.any([ctx.signal, evaluation.signal]) : evaluation.signal;
+    const stopWatchingEsc =
+      ctx.mode === "tui"
+        ? ctx.ui.onTerminalInput((data) => {
+            if (matchesKey(data, "escape")) evaluation.abort();
+            return undefined;
+          })
+        : undefined;
+
     let verdict: Verdict;
     try {
       verdict = { done: true, reason: "" };
       if (state.check) {
-        setPhase(ctx, "running check", `Goal: running \`${state.check.slice(0, 60)}\`…`);
-        verdict = await runCheck(ctx, state.check);
+        setPhase(ctx, "running check", `Goal: running \`${state.check.slice(0, 60)}\`… (esc cancels)`);
+        verdict = await runCheck(ctx, state.check, signal);
       }
+      if (signal.aborted) throw new Error("cancelled");
       if (verdict.done) {
-        setPhase(ctx, "judging", "Goal: the judge is reading the transcript…");
-        const judged = await runJudge(ctx, state.objective, event.context.llmMessages);
+        setPhase(ctx, "judging", "Goal: the judge is reading the transcript… (esc cancels)");
+        const judged = await runJudge(ctx, state.objective, event.context.llmMessages, signal);
         if (!judged) {
           return pause(
             "error",
@@ -300,10 +323,18 @@ export default function (pi: ExtensionAPI) {
         verdict = judged;
       }
     } catch (err) {
+      // After /goal stop the state already says why it stopped.
+      if (!state?.active) return;
+      if (signal.aborted) return pause("aborted", "Goal paused: evaluation cancelled. /goal resume to continue.");
       return pause("error", `Goal paused: the evaluator failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
+      cancelEvaluation = undefined;
+      stopWatchingEsc?.();
       if (ctx.mode === "tui") ctx.ui.setWorkingMessage();
     }
+
+    // The evaluation can take minutes: if the user ran /goal stop meanwhile, their decision stands.
+    if (!state?.active) return;
 
     if (verdict.done) return pause("met", `Goal met after ${state.iteration} continuation(s). ${verdict.reason}`);
     if (state.iteration >= state.maxIterations) {

@@ -20,7 +20,7 @@ Then run `/reload` in any open session. To try it for one session without instal
 pi -e git:github.com/rafae2k/pi-background-agents
 ```
 
-Requires Node 24 or newer. Tested on pi 1.4.0.
+Requires Node 24 or newer. Tested on pi 1.4.0, with `dispatch_agent` also checked in print mode on 1.0.4 and 1.3.0.
 
 ## Quick start
 
@@ -79,7 +79,7 @@ When the main agent is about to stop, the goal is evaluated:
 1. The `--check` command, if given, must exit 0.
 2. A judge using the current model reads the objective and the end of the transcript, and decides whether the evidence proves completion.
 
-If the goal isn't met, the reason is sent back and pi continues, up to `--max` times (10 by default). The agent can write `BLOCKED: <question>` to pause and ask you.
+If the goal isn't met, the reason is sent back and pi continues, up to `--max` times (10 by default). The agent can write `BLOCKED: <question>` to pause and ask you. `Esc` during an evaluation cancels it and pauses the goal, and a judge that gives no answer in 3 minutes pauses it too.
 
 The footer shows the state at all times:
 
@@ -113,6 +113,7 @@ The tool takes `agents: [...]` instead of one call per agent because of how [pi-
 
 - **Agents end with the session.** Closing pi, `/new` and `/reload` stop running agents. Their sessions are saved, so they can be continued with `resume_session`.
 - **Agents share the working tree** unless you give each one its own git worktree through `cwd`. Give parallel agents separate files.
+- **Agents don't inherit `-e`.** A subagent loads your settings and project extensions, not extensions passed with `-e`. A model that comes from a `-e` provider must be installed for agents to use it.
 - **Agents can't start agents.** Subagents don't get the tool, which rules out runaway fan-out.
 - **Dialogs are cancelled in agents.** A subagent has no one to answer an extension's prompt, so it receives a cancel.
 - **The live view holds the last 1,000 entries**, and it is lost when the session ends. The saved session and report remain.

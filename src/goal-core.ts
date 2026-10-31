@@ -83,10 +83,18 @@ export function parseGoalArgs(raw: string): { check?: string; max?: number; obje
   return { check, max, objective: rest.trim() };
 }
 
-export function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+/** Rejects on timeout or abort even if `work` ignores its signal and never settles. */
+export function withTimeout<T>(work: Promise<T>, ms: number, what: string, signal?: AbortSignal): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
+  let onAbort: (() => void) | undefined;
+  const limit = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`${what} gave no answer in ${formatDuration(ms)}`)), ms);
+    onAbort = () => reject(new Error(`${what} was cancelled`));
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
   });
-  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+  return Promise.race([work, limit]).finally(() => {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener("abort", onAbort);
+  });
 }
